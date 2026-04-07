@@ -11,7 +11,7 @@ process splitIntervals {
     script:
     """
     touch intervals.list
-    for i in {4..7}; do echo "\${i}" >> intervals.list; done
+    for i in {1p,1q,2q,2p,3p,3q,4,5,6,X,Y,MT}; do echo "\${i}" >> intervals.list; done
       
     gatk SplitIntervals \
       --reference "${reference[0]}" \
