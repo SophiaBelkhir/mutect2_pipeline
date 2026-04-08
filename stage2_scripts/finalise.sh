@@ -1,9 +1,9 @@
 #!/bin/bash
 
 REF=/lustre/scratch125/casm/teams/team267_murchison/ref_genomes/Sarcophilus_Harrisii/mSarHar1_11_split/Sarcophilus_harrisii.mSarHar_split.fa
-GR=/lustre/scratch126/casm/staging/team267_murchison/sb71/devils_high_cov/02_04_2026_mutect2_stage2_test/MergedResources/germline_resource.biallelic2.vcf.gz
-PON=/lustre/scratch126/casm/staging/team267_murchison/sb71/devils_high_cov/02_04_2026_mutect2_stage2_test/MergedResources/panel_of_normals.vcf.gz
-SCD=/lustre/scratch126/casm/staging/team267_murchison/sb71/devils_high_cov/02_04_2026_mutect2_stage2_test/MergedResources/somatic_candidates.vcf.gz
+GR=/lustre/scratch126/casm/staging/team267_murchison/sb71/devils_high_cov/03_04_26_mutect2_stage2_test/MergedResources/germline_resource.biallelic2.vcf.gz
+PON=/lustre/scratch126/casm/staging/team267_murchison/sb71/devils_high_cov/03_04_26_mutect2_stage2_test/MergedResources/panel_of_normals.vcf.gz
+SCD=/lustre/scratch126/casm/staging/team267_murchison/sb71/devils_high_cov/03_04_26_mutect2_stage2_test/MergedResources/somatic_candidates.vcf.gz
 
 if [ ! -e "$REF" ]; then
   echo "Ref file not found"
