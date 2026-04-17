@@ -1,5 +1,6 @@
 process runContaminationModelOnPaired {
-    memory { 4.GB + 4.GB * (task.attempt - 1) }
+    memory { 10.GB + 7.GB * (task.attempt - 1) }
+    errorStrategy 'retry'
     maxRetries 3
     time '12h'
     queue 'normal'
@@ -47,7 +48,8 @@ process runContaminationModelOnPaired {
 }
 
 process runContaminationModelOnTumourOnly {
-    memory { 4.GB + 4.GB * (task.attempt - 1) }
+    memory { 10.GB + 5.GB * (task.attempt - 1) }
+    errorStrategy 'retry'
     maxRetries 3
     time '12h'
     queue 'normal'

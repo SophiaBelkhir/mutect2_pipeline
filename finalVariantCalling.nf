@@ -1,6 +1,6 @@
 process callMatchedSomaticVariants {
     cpus 8
-    memory { 18.GB + 5.GB * (task.attempt - 1) }
+    memory { 20.GB + 5.GB * (task.attempt - 1) }
     errorStrategy 'retry'
     maxRetries 2
     time '12h'
