@@ -11,7 +11,7 @@ params.intervals          = 50
 params.outdir             = "results"
 
 include { indexReference }                                     from "./preprocessReference.nf"
-include { simpleSplitIntervals }                               from "./preprocessReference.nf"
+include { splitIntervals }                               from "./preprocessReference.nf"
 include { makeReferenceDict }                                  from "./preprocessReference.nf"
 include { callMatchedSomaticVariants }                         from "./finalVariantCalling.nf"
 include { callSomaticVariants }                                from "./finalVariantCalling.nf"
@@ -42,7 +42,7 @@ workflow {
     ref_files = ref_ch.merge(fai_ch).merge(dict_ch)
 
     // Chop into intervals for scattering-gathering
-    split_intervals = simpleSplitIntervals(ref_files, params.intervals)
+    split_intervals = splitIntervals(ref_files, params.intervals)
     ivls = split_intervals.flatten()
         .map { interval ->
             def intervalNumberMatch = interval.getName() =~ /^(\d+)/
