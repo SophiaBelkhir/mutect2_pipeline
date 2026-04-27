@@ -4,7 +4,7 @@ params.reference    = "genome.fa"
 params.normals      = "normals_folder"
 params.tumours      = "tumours_folder"
 params.outdir       = "results"
-params.numIntervals = 8
+params.numIntervals = 40
 
 def remove_duplicate_filepair_keys(primary_ch, secondary_ch) {
     // primary_ch and secondary_ch are channels produced by
@@ -12,8 +12,8 @@ def remove_duplicate_filepair_keys(primary_ch, secondary_ch) {
     // remove the key from the secondary channel.
     // This will avoid duplicating work on a bam file if it has
     // a bai and a csi index.
-    return primary_ch.concat(secondary_ch).groupTuple() |
-        map { it -> tuple(it[0], it[1][0]) }
+    return primary_ch.concat(secondary_ch).groupTuple()
+        .map { entry -> tuple(entry[0], entry[1][0]) }
 }
 
 include { makeBamToSampleNameMap }                             from "./preprocessSamples.nf"
@@ -23,6 +23,9 @@ include { makeReferenceDict }                                  from "./preproces
 include { runMutectOnNormal }                                  from "./initialVariantCalling.nf"
 include { runMutectOnTumour }                                  from "./initialVariantCalling.nf"
 include { runHaplotypeCallerOnNormal }                         from "./initialVariantCalling.nf"
+include { concatVcfParts as concatMutectTumours }              from "./vcfConcatenator.nf"
+include { concatVcfParts as concatMutectNormals }              from "./vcfConcatenator.nf"
+include { concatGvcfParts }                                    from "./vcfConcatenator.nf"
 
 
 workflow {
@@ -88,4 +91,57 @@ workflow {
 
     // Run HaplotypeCaller on normals
     gvcfs_ch = runHaplotypeCallerOnNormal(normals_for_calling_ch)
+
+
+    ///////////////////////////////////////////////////////
+    //  Stage 2 preprocess: concatenate/reblock interval calls
+    //
+
+    // Concatenate all normal Mutect2 call parts from stage 1
+    grouped_mutect_normals_ch = normals_called_by_mutect_ch
+        .map { _interval_id, vcf, tbi, _stats ->
+            def sample = vcf.baseName.replaceFirst(/\.\d+\.normal\.mutect2_panel_calls\.vcf$/, '')
+            tuple(sample, vcf, tbi)
+        }
+        .groupTuple(size: params.numIntervals)
+        .map { sample, vcfs, tbis -> tuple(sample,
+                                           "mutect2_normal",
+                                           vcfs.sort { f -> f.name },
+                                           tbis.sort { f -> f.name }) }
+    grouped_mutect_normals_with_ref_ch = ref_files.combine(grouped_mutect_normals_ch)
+        .map { fa, fai, dict, sample, label, vcfs, tbis ->
+            tuple(sample, label, [fa, fai, dict], vcfs, tbis) }
+    concatMutectNormals(grouped_mutect_normals_with_ref_ch)
+
+    // Concatenate all tumour Mutect2 call parts from stage 1
+    grouped_mutect_tumours_ch = tumours_first_called_by_mutect_ch
+        .map { _interval_id, vcf, tbi, _stats ->
+            def sample = vcf.baseName.replaceFirst(/\.\d+\.tumour\.mutect2_candidate_discovery_calls\.vcf$/, '')
+            tuple(sample, vcf, tbi)
+        }
+        .groupTuple(size: params.numIntervals)
+        .map { sample, vcfs, tbis -> tuple(sample,
+                                           "mutect2_tumour",
+                                           vcfs.sort { f -> f.name },
+                                           tbis.sort { f -> f.name }) }
+    grouped_mutect_tumours_with_ref_ch = ref_files.combine(grouped_mutect_tumours_ch)
+        .map { fa, fai, dict, sample, label, vcfs, tbis ->
+            tuple(sample, label, [fa, fai, dict], vcfs, tbis) }
+    concatMutectTumours(grouped_mutect_tumours_with_ref_ch)
+
+    // Concatenate and reblock all normal HaplotypeCaller gVCF parts from stage 1
+    grouped_haplotypecaller_ch = gvcfs_ch
+        .map { _interval_id, gvcf, tbi ->
+            def sample = gvcf.baseName.replaceFirst(/\.\d+\.haplotypecaller\.g\.vcf$/, '')
+            tuple(sample, gvcf, tbi)
+        }
+        .groupTuple(size: params.numIntervals)
+        .map { sample, vcfs, tbis -> tuple(sample,
+                                           "haplotypecaller_normal",
+                                           vcfs.sort { f -> f.name },
+                                           tbis.sort { f -> f.name }) }
+    grouped_haplotypecaller_with_ref_ch = ref_files.combine(grouped_haplotypecaller_ch)
+        .map { fa, fai, dict, sample, label, vcfs, tbis ->
+            tuple(sample, label, [fa, fai, dict], vcfs, tbis) }
+    concatGvcfParts(grouped_haplotypecaller_with_ref_ch)
 }
