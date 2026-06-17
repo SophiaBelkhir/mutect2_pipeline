@@ -1,5 +1,5 @@
 process genotypeGvcfIntervals {
-    memory { 15.GB + 4.GB * (task.attempt - 1) }
+    memory { 50.GB + 15.GB * (task.attempt - 1) }
     errorStrategy 'retry'
     maxRetries 3
 
