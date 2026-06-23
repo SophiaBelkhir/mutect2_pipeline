@@ -1,7 +1,9 @@
 process genotypeGvcfIntervals {
-    memory { 50.GB + 15.GB * (task.attempt - 1) }
+    memory { 95.GB + 25.GB * (task.attempt - 1) }
     errorStrategy 'retry'
     maxRetries 3
+    time '38h'
+    queue 'long'
 
     input:
     tuple val(interval_id), path(ref), path(gvcfs), path(gvcf_index), path(interval)

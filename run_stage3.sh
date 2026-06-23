@@ -8,9 +8,11 @@ nextflow run ${PIPELINE_DIR}/stage3.nf \
          --normals ${ANALYSIS_DIR}/cram_files_for_stage_3/normals \
          --tumours ${ANALYSIS_DIR}/cram_files_for_stage_3/tumours \
          --samplesheet ${ANALYSIS_DIR}/cram_files_for_stage_3/samplesheet.csv \
-         --germline_resource ${ANALYSIS_DIR}/03_04_26_mutect2_stage2_test/MergedResources/germline_resource.biallelic2.vcf.gz \
-         --panel_of_normals ${ANALYSIS_DIR}/03_04_26_mutect2_stage2_test/MergedResources/panel_of_normals.vcf.gz \
-         --somatic_candidates ${ANALYSIS_DIR}/03_04_26_mutect2_stage2_test/MergedResources/candidates.vcf.gz \
+         --germline_resource ${ANALYSIS_DIR}/MutectStage2MergedResources/germline_resource.biallelic2.vcf.gz \
+         --panel_of_normals ${ANALYSIS_DIR}/MutectStage2MergedResources/panel_of_normals.vcf.gz \
+         --somatic_candidates ${ANALYSIS_DIR}/MutectStage2MergedResources/candidates.vcf.gz \
+         --bcftools_candidates ${ANALYSIS_DIR}/MutectStage2MergedResources/bcftools_candidates.tsv.gz \
+         --bed_file_pos ${ANALYSIS_DIR}/MutectStage2MergedResources/all_candidates_positions.bed \
          --intervals 99 \
          --outdir /nfs/casm/team267_murchison/sb71 \
          -with-report \ 

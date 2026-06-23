@@ -187,3 +187,52 @@ process recallGermlineVariants {
         --assembly-region-padding 300
     """
 }
+
+process callBcftoolsMpileupVariants {
+    cpus 4
+    memory { 20.GB + 5.GB * (task.attempt - 1) }
+    errorStrategy 'retry'
+    maxRetries 3
+    time '12h'
+    queue 'normal'
+    executor 'lsf'
+
+    input:
+    tuple val(sample),
+        path(reference),
+        path(bam),
+        path(candidates)
+
+    output:
+    tuple val(sample),
+        path("${sample}.bcftools.mpileup.vcf.gz"),
+        path("${sample}.bcftools.mpileup.vcf.gz.tbi"),
+        emit: vcfs
+
+    publishDir "${params.outdir}/BcftoolsMpileupCalls", mode: 'copy', pattern: '*.vcf.gz*'
+
+    script:
+    """
+    #!/bin/bash
+    set -euo pipefail
+
+    # run bcftools mpileup
+    bcftools mpileup \
+        -f ${reference[0]} \
+        -R ${candidates[0]} \
+        -a FORMAT/AD,FORMAT/DP,FORMAT/ADF,FORMAT/ADR,FORMAT/SP \
+        --max-depth 2000 \
+        --threads ${task.cpus} \
+        -Ou ${bam[0]} \
+    | bcftools call \
+        -m \
+        -C alleles \
+        -T ${candidates[0]}\
+        -A \
+        -i \
+        --threads ${task.cpus} \
+        -Oz -o ${sample}.bcftools.mpileup.vcf.gz
+    tabix ${sample}.bcftools.mpileup.vcf.gz
+
+    """
+}

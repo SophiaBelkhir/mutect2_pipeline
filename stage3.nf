@@ -6,24 +6,30 @@ params.tumours            = "tumours_folder"
 params.samplesheet        = "samplesheet.csv"
 params.germline_resource  = "germline_resource.vcf.gz"
 params.panel_of_normals   = "panel_of_normals.vcf.gz"
-params.somatic_candidates = "somatic_candidates.vcf.gz"
+params.somatic_candidates = "candidates.vcf.gz"
+params.bcftools_candidates = "bcftools_candidates.tsv.gz"
+params.bed_file_pos        = "all_candidates_positions.bed"
 params.intervals          = 50
 params.outdir             = "results"
 
 include { indexReference }                                     from "./preprocessReference.nf"
-include { splitIntervals }                               from "./preprocessReference.nf"
+include { splitIntervals }                                     from "./preprocessReference.nf"
 include { makeReferenceDict }                                  from "./preprocessReference.nf"
 include { callMatchedSomaticVariants }                         from "./finalVariantCalling.nf"
 include { callSomaticVariants }                                from "./finalVariantCalling.nf"
 include { callSomaticVariants as callSomaticVariantsOnNormal } from "./finalVariantCalling.nf"
 include { recallGermlineVariants }                             from "./finalVariantCalling.nf"
-include { runContaminationModelOnPaired }                      from "./contaminationModelling.nf"
-include { runContaminationModelOnTumourOnly }                  from "./contaminationModelling.nf"
 include { filterMutectCalls }                                  from "./filterModelling.nf"
 include { filterMutectCallsOnNormals }                         from "./filterModelling.nf"
 include { learnReadOrientationModel }                          from "./filterModelling.nf"
 include { concatFilteredCalls }                                from "./vcfConcatenator.nf"
 include { concatSecondHaplotypeCallerCalls }                   from "./vcfConcatenator.nf"
+include { callBcftoolsMpileupVariants }                        from "./finalVariantCalling.nf"
+include { mosdepthComputePerPos }                              from "./mosdepthCompute.nf"
+
+// Comment out contamination modelling for now, as I don't find it relevant, but keep for future reference
+// include { runContaminationModelOnPaired }                      from "./contaminationModelling.nf"
+// include { runContaminationModelOnTumourOnly }                  from "./contaminationModelling.nf"
 
 
 def get_id_from_filename = { f ->
@@ -145,7 +151,20 @@ workflow {
     somatic_candidates = Channel
         .fromFilePairs("${params.somatic_candidates}{,.tbi}", size: 2, checkIfExists: true)
         .map { label, files -> files }
+    bcftools_candidates = Channel
+        .fromFilePairs("${params.bcftools_candidates}{,.tbi}", size: 2, checkIfExists: true)
+        .map { label, files -> files }
 
+
+     ///////////////////////////////////////////////////////
+    //         Run mosdepth to compute coverage at candidate positions in normals
+    //
+    all_normals_for_mosdepth_ch = all_normals.map { normal_id, normal -> tuple(normal_id, normal[0], normal[1]) }
+    
+    bed_file_ch = Channel.value(file(params.bed_file_pos))
+    coverage_at_candidate_positions = mosdepthComputePerPos(
+        all_normals_for_mosdepth_ch.combine(bed_file_ch)
+    )
 
     ///////////////////////////////////////////////////////
     //         Stage 3: Final calling and filtering
@@ -209,6 +228,24 @@ workflow {
     // Rerun haplotype caller on normals at candidate sites
     rehaplotyped_normals = recallGermlineVariants(all_normals_calling_ch)
 
+    // Prepare channels for bcftools mpileup variant calling
+    // assume that run in tumour only mode, want all tumours and all normals not split into intervals
+    all_tumours_for_bcftools_ch = all_tumours.combine(ref_files)
+        .map { sample, tumour_bam, fa, fai, dict -> tuple(sample, [fa, fai, dict], tumour_bam.toList()) }
+
+    all_normals_for_bcftools_ch = all_normals.combine(ref_files)
+        .map { sample, normal_bam, fa, fai, dict -> tuple(sample, [fa, fai, dict], normal_bam.toList()) }
+
+    all_samples_for_bcftools_calling_ch = all_tumours_for_bcftools_ch
+        .mix(all_normals_for_bcftools_ch)
+        .combine(bcftools_candidates)
+        .map { sample, ref, bam, candidates, candidates_index  ->
+            tuple(sample, ref, bam, [candidates, candidates_index ]) }   
+
+    // Run bcftools mpileup variant calling on normal and tumour samples
+    
+    bcftools_calls_ch = callBcftoolsMpileupVariants(all_samples_for_bcftools_calling_ch)
+
     // Build a strand bias model
     orientation_model_ch = paired_calls_ch.f1r2s
         .mix(tumour_only_calls_ch.f1r2s)
@@ -218,41 +255,41 @@ workflow {
     orientation_model = learnReadOrientationModel(orientation_model_ch)
 
     // Build a contamination model
-    paired_contamination_ch = paired
-        .combine(ref_files)
-        .combine(germline_resource)
-        .map { pair_id, tumour_id, tumour_bam, normal_id, normal_bam, 
-               fa, fai, dict, germline_resource, germline_resource_index ->
-            tuple(tumour_id, [fa, fai, dict],
-                  tumour_bam.toList(),
-                  normal_bam.toList(),
-                  [germline_resource, germline_resource_index]) }
+    // paired_contamination_ch = paired
+    //    .combine(ref_files)
+    //    .combine(germline_resource)
+    //    .map { pair_id, tumour_id, tumour_bam, normal_id, normal_bam, 
+    //           fa, fai, dict, germline_resource, germline_resource_index ->
+    //        tuple(tumour_id, [fa, fai, dict],
+    //              tumour_bam.toList(),
+    //              normal_bam.toList(),
+    //              [germline_resource, germline_resource_index]) }
 
-    run_contamination_model_on_paired_ch = runContaminationModelOnPaired(paired_contamination_ch)
+    // run_contamination_model_on_paired_ch = runContaminationModelOnPaired(paired_contamination_ch)
     
-    unpaired_contamination_ch = tumour_only
-        .combine(ref_files)
-        .combine(germline_resource)
-        .map { tumour_id, tumour, fa, fai, dict, germline_resource, germline_resource_index ->
-            tuple(tumour_id, [fa, fai, dict],
-                  tumour.toList(),
-                  [germline_resource, germline_resource_index]) }
+    // unpaired_contamination_ch = tumour_only
+    //    .combine(ref_files)
+    //    .combine(germline_resource)
+    //    .map { tumour_id, tumour, fa, fai, dict, germline_resource, germline_resource_index ->
+    //        tuple(tumour_id, [fa, fai, dict],
+    //              tumour.toList(),
+    //              [germline_resource, germline_resource_index]) }
 
-    run_contamination_model_on_tumour_only_ch = runContaminationModelOnTumourOnly(unpaired_contamination_ch)
+    //run_contamination_model_on_tumour_only_ch = runContaminationModelOnTumourOnly(unpaired_contamination_ch)
     
     // Filter calls
     tumour_calls = paired_calls_ch.vcfs
         .mix(tumour_only_calls_ch.vcfs)
 
-    tumour_contamination = run_contamination_model_on_paired_ch
-        .mix(run_contamination_model_on_tumour_only_ch)
+    // tumour_contamination = run_contamination_model_on_paired_ch
+    //    .mix(run_contamination_model_on_tumour_only_ch)
 
     tumour_filter_ch = ref_files
         .combine(tumour_calls)
         .map { fa, fai, dict, sample, vcf, tbi, stats, interval_id, intervals ->
             tuple(sample, [fa, fai, dict], [vcf, tbi], stats, interval_id, intervals) }
-        .combine(tumour_contamination, by: 0) 
         .combine(orientation_model, by: 0)
+        // .combine(tumour_contamination, by: 0) 
 
     filtered = filterMutectCalls(tumour_filter_ch)
 
