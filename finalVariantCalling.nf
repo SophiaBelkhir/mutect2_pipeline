@@ -29,7 +29,7 @@ process callMatchedSomaticVariants {
     tuple val(sample), path("*.f1r2.tar.gz*"), emit: f1r2s
     tuple val(sample), path("${interval_id}.${sample}.missing_candidates.vcf.gz"), emit: missing_candidates
 
-    publishDir "${params.outdir}/SecondTumourCalls", mode: 'copy', pattern: '*gz*'
+    // publishDir "${params.outdir}/SecondTumourCalls", mode: 'copy', pattern: '*gz*'
     script:
     """
     # Restrict candidate set to the current interval
@@ -102,7 +102,7 @@ process callSomaticVariants {
     tuple val(sample), path("*.f1r2.tar.gz*"), emit: f1r2s
     tuple val(sample), path("${interval_id}.${sample}.missing_candidates.vcf.gz"), emit: missing_candidates
 
-    publishDir "${params.outdir}/SecondTumourCalls", mode: 'copy', pattern: '*gz*'
+    // publishDir "${params.outdir}/SecondTumourCalls", mode: 'copy', pattern: '*gz*'
     script:
     """
     # Restrict candidate set to the current interval
@@ -162,7 +162,7 @@ process recallGermlineVariants {
         path(intervals),
         emit: vcfs
 
-    publishDir "${params.outdir}/SecondHaplotypeCallerCalls", mode: 'copy', pattern: '*gz*'
+    // publishDir "${params.outdir}/SecondHaplotypeCallerCalls", mode: 'copy', pattern: '*gz*'
     script:
     def sample = bam[0].getBaseName().replaceFirst(/\\.bam$/, "").replaceFirst(/\\.cram$/, "")
     """
@@ -189,8 +189,8 @@ process recallGermlineVariants {
 }
 
 process callBcftoolsMpileupVariants {
-    cpus 4
-    memory { 20.GB + 5.GB * (task.attempt - 1) }
+    cpus 8
+    memory { 25.GB + 5.GB * (task.attempt - 1) }
     errorStrategy 'retry'
     maxRetries 3
     time '12h'
@@ -198,41 +198,54 @@ process callBcftoolsMpileupVariants {
     executor 'lsf'
 
     input:
-    tuple val(sample),
+    tuple val(interval_id),
         path(reference),
+        val(sample),
         path(bam),
+        path(intervals),
         path(candidates)
 
     output:
     tuple val(sample),
         path("${sample}.bcftools.mpileup.vcf.gz"),
         path("${sample}.bcftools.mpileup.vcf.gz.tbi"),
+        val(interval_id),
+        path(intervals),
         emit: vcfs
 
-    publishDir "${params.outdir}/BcftoolsMpileupCalls", mode: 'copy', pattern: '*.vcf.gz*'
+    // publishDir "${params.outdir}/BcftoolsMpileupCalls", mode: 'copy', pattern: '*.vcf.gz*'
 
     script:
     """
     #!/bin/bash
     set -euo pipefail
 
+    # Restrict candidate set to the current interval
+    bcftools view -R <(grep -v "^@" ${intervals}) \
+        -Oz -o candidates.subset.vcf.gz -W=tbi ${candidates[0]}
+
+    # Turn into a tab-delimited file for bcftools mpileup/calls -C alleles -R/-T
+    bcftools query -f '%CHROM\t%POS\t%REF,%ALT\n' candidates.subset.vcf.gz \
+        | bgzip -c > candidates.subset.tsv.gz && tabix -s1 -b2 -e2 candidates.subset.tsv.gz
+
     # run bcftools mpileup
     bcftools mpileup \
-        -f ${reference[0]} \
-        -R ${candidates[0]} \
+        -f "${reference[0]}" \
+        -R candidates.subset.tsv.gz \
         -a FORMAT/AD,FORMAT/DP,FORMAT/ADF,FORMAT/ADR,FORMAT/SP \
         --max-depth 2000 \
         --threads ${task.cpus} \
-        -Ou ${bam[0]} \
+        -Ou "${bam[0]}" \
     | bcftools call \
         -m \
         -C alleles \
-        -T ${candidates[0]}\
+        -T candidates.subset.tsv.gz \
         -A \
         -i \
         --threads ${task.cpus} \
-        -Oz -o ${sample}.bcftools.mpileup.vcf.gz
-    tabix ${sample}.bcftools.mpileup.vcf.gz
+        -Oz -o "${interval_id}.${sample}.bcftools.mpileup.vcf.gz" \
 
+    # Index the output VCF
+    tabix "${interval_id}.${sample}.bcftools.mpileup.vcf.gz"
     """
 }

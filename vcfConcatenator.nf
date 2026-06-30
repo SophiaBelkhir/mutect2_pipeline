@@ -84,7 +84,7 @@ process concatFilteredCalls {
     path("*.concatenated.vcf.gz"), emit: vcf
     path("*.concatenated.vcf.gz.tbi"), emit: tbi
 
-    publishDir "${params.outdir}/Filtered/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
+    // publishDir "${params.outdir}/Filtered/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
 
     script:
     """
@@ -115,7 +115,34 @@ process concatSecondHaplotypeCallerCalls {
     path("*.concatenated.vcf.gz"), emit: vcf
     path("*.concatenated.vcf.gz.tbi"), emit: tbi
 
-    publishDir "${params.outdir}/SecondHaplotypeCallerCalls/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
+    // publishDir "${params.outdir}/SecondHaplotypeCallerCalls/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
+
+    script:
+    """
+    bcftools concat *.vcf.gz \
+        | bcftools sort \
+        | bcftools norm -f ${reference[0]} -m -both \
+            -Oz -o "${sample}.concatenated.vcf.gz"
+    bcftools index -t "${sample}.concatenated.vcf.gz"
+    """
+}
+
+process concatBcftoolsMpileupCalls {
+    memory { 10.GB + 4.GB * (task.attempt - 1) }
+    errorStrategy 'retry'
+    maxRetries 3
+
+    input:
+    tuple val(sample),
+        path(reference),
+        path(vcfs),
+        path(tbis)
+
+    output:
+    path("*.concatenated.vcf.gz"), emit: vcf
+    path("*.concatenated.vcf.gz.tbi"), emit: tbi
+
+    publishDir "${params.outdir}/BcftoolsMpileupCalls/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
 
     script:
     """

@@ -7,8 +7,6 @@ params.samplesheet        = "samplesheet.csv"
 params.germline_resource  = "germline_resource.vcf.gz"
 params.panel_of_normals   = "panel_of_normals.vcf.gz"
 params.somatic_candidates = "candidates.vcf.gz"
-params.bcftools_candidates = "bcftools_candidates.tsv.gz"
-params.bed_file_pos        = "all_candidates_positions.bed"
 params.intervals          = 50
 params.outdir             = "results"
 
@@ -24,15 +22,14 @@ include { filterMutectCallsOnNormals }                         from "./filterMod
 include { learnReadOrientationModel }                          from "./filterModelling.nf"
 include { concatFilteredCalls }                                from "./vcfConcatenator.nf"
 include { concatSecondHaplotypeCallerCalls }                   from "./vcfConcatenator.nf"
+include { concatBcftoolsMpileupCalls }                         from "./vcfConcatenator.nf"
 include { callBcftoolsMpileupVariants }                        from "./finalVariantCalling.nf"
-include { mosdepthComputePerPos }                              from "./mosdepthCompute.nf"
 
 // Comment out contamination modelling for now, as I don't find it relevant, but keep for future reference
 // include { runContaminationModelOnPaired }                      from "./contaminationModelling.nf"
 // include { runContaminationModelOnTumourOnly }                  from "./contaminationModelling.nf"
 
-
-def get_id_from_filename = { f ->
+def get_id_from_filename(f) {
     f.getBaseName().replaceFirst(/\.(bam|cram)$/, "")
 }
 
@@ -121,17 +118,17 @@ workflow {
             tuple(pair_id, tumour_id, tumour, normal_id, normal) }
         .set { paired }
     inputs.tumour_only
-        .map { sample, tumour_id, tumour, _, _2 -> tuple(tumour_id, tumour) }
+        .map { sample, tumour_id, tumour, _unused1, _unused2 -> tuple(tumour_id, tumour) }
         .set { tumour_only }
     inputs.normal_only
-        .map { sample, _, _2, normal_id, normal -> tuple(normal_id, normal) }
+        .map { sample, _unused1, _unused2, normal_id, normal -> tuple(normal_id, normal) }
         .set { normal_only }
     all_normals = paired
-        .map { sample, _, _2, normal_id, normal -> tuple(normal_id, normal) }
+        .map { sample, _unused1, _unused2, normal_id, normal -> tuple(normal_id, normal) }
         .concat(normal_only)
         .unique { it[0] }
     all_tumours = paired
-        .map { pair_id, tumour_id, tumour, _, _2 -> tuple(tumour_id, tumour) }
+        .map { pair_id, tumour_id, tumour, _unused1, _unused2 -> tuple(tumour_id, tumour) }
         .concat(tumour_only)
         .unique { it[0] } 
 
@@ -156,16 +153,6 @@ workflow {
         .map { label, files -> files }
 
 
-     ///////////////////////////////////////////////////////
-    //         Run mosdepth to compute coverage at candidate positions in normals
-    //
-    all_normals_for_mosdepth_ch = all_normals.map { normal_id, normal -> tuple(normal_id, normal[0], normal[1]) }
-    
-    bed_file_ch = Channel.value(file(params.bed_file_pos))
-    coverage_at_candidate_positions = mosdepthComputePerPos(
-        all_normals_for_mosdepth_ch.combine(bed_file_ch)
-    )
-
     ///////////////////////////////////////////////////////
     //         Stage 3: Final calling and filtering
     //
@@ -178,14 +165,14 @@ workflow {
         .combine(panel_of_normals)
         .combine(somatic_candidates)
         .map { pair_id, tumour_id, tumour_bam, normal_id, normal_bam, interval_id,
-              intervals, fa, fai, dict, germline_resource, germline_resource_index,
-              panel_of_normals, panel_of_normals_index, candidates, candidates_index ->
+                            intervals, fa, fai, dict, germline_resource_file, germline_resource_index,
+                            panel_of_normals_file, panel_of_normals_index, candidates_file, candidates_index ->
             tuple(interval_id, [fa, fai, dict], tumour_id,
                   tumour_bam.toList(), normal_bam.toList(),
                   intervals,
-                  [germline_resource, germline_resource_index],
-                  [panel_of_normals, panel_of_normals_index],
-                  [candidates, candidates_index]) }
+                                    [germline_resource_file, germline_resource_index],
+                                    [panel_of_normals_file, panel_of_normals_index],
+                                    [candidates_file, candidates_index]) }
     
     paired_calls_ch = callMatchedSomaticVariants(paired_calling_ch)
 
@@ -196,14 +183,14 @@ workflow {
         .combine(panel_of_normals)
         .combine(somatic_candidates)
         .map { sample, tumour_bam, interval_id,
-              intervals, fa, fai, dict, germline_resource, germline_resource_index,
-              panel_of_normals, panel_of_normals_index, candidates, candidates_index ->
+                            intervals, fa, fai, dict, germline_resource_file, germline_resource_index,
+                            panel_of_normals_file, panel_of_normals_index, candidates_file, candidates_index ->
             tuple(interval_id, [fa, fai, dict], sample,
                   tumour_bam.toList(),
                   intervals,
-                  [germline_resource, germline_resource_index],
-                  [panel_of_normals, panel_of_normals_index],
-                  [candidates, candidates_index]) }
+                                    [germline_resource_file, germline_resource_index],
+                                    [panel_of_normals_file, panel_of_normals_index],
+                                    [candidates_file, candidates_index]) }
 
     tumour_only_calls_ch = callSomaticVariants(tumour_only_calling_ch)
 
@@ -214,14 +201,14 @@ workflow {
         .combine(panel_of_normals)
         .combine(somatic_candidates)
         .map { sample, normal_bam, interval_id,
-              intervals, fa, fai, dict, germline_resource, germline_resource_index,
-              panel_of_normals, panel_of_normals_index, candidates, candidates_index ->
+                            intervals, fa, fai, dict, germline_resource_file, germline_resource_index,
+                            panel_of_normals_file, panel_of_normals_index, candidates_file, candidates_index ->
             tuple(interval_id, [fa, fai, dict], sample,
                   normal_bam.toList(),
                   intervals,
-                  [germline_resource, germline_resource_index],
-                  [panel_of_normals, panel_of_normals_index],
-                  [candidates, candidates_index]) }
+                                    [germline_resource_file, germline_resource_index],
+                                    [panel_of_normals_file, panel_of_normals_index],
+                                    [candidates_file, candidates_index]) }
 
     all_normals_calls_ch = callSomaticVariantsOnNormal(all_normals_calling_ch)
 
@@ -229,22 +216,28 @@ workflow {
     rehaplotyped_normals = recallGermlineVariants(all_normals_calling_ch)
 
     // Prepare channels for bcftools mpileup variant calling
-    // assume that run in tumour only mode, want all tumours and all normals not split into intervals
-    all_tumours_for_bcftools_ch = all_tumours.combine(ref_files)
-        .map { sample, tumour_bam, fa, fai, dict -> tuple(sample, [fa, fai, dict], tumour_bam.toList()) }
+    // assume that run in tumour only mode, want all tumours and all normals  split into intervals
 
-    all_normals_for_bcftools_ch = all_normals.combine(ref_files)
-        .map { sample, normal_bam, fa, fai, dict -> tuple(sample, [fa, fai, dict], normal_bam.toList()) }
-
-    all_samples_for_bcftools_calling_ch = all_tumours_for_bcftools_ch
-        .mix(all_normals_for_bcftools_ch)
-        .combine(bcftools_candidates)
-        .map { sample, ref, bam, candidates, candidates_index  ->
-            tuple(sample, ref, bam, [candidates, candidates_index ]) }   
-
+    all_samples_for_bcftools_calling_ch =  tumour_interval_ch
+        .mix(normal_interval_ch)
+        .combine(ref_files)
+        .combine(somatic_candidates)
+        .map { sample, bam, interval_id, intervals, fa, fai, dict, candidates_file, candidates_index ->
+            tuple(interval_id, [fa, fai, dict], sample, bam.toList(), intervals, [candidates_file, candidates_index]) }
     // Run bcftools mpileup variant calling on normal and tumour samples
     
     bcftools_calls_ch = callBcftoolsMpileupVariants(all_samples_for_bcftools_calling_ch)
+
+    // Concatenate bcftools mpileup calls
+    grouped_genotyped_bcftools = bcftools_calls_ch
+        .map { it -> tuple(it[0], it[1], it[2]) } // sample, vcf, tbi
+        .groupTuple(size: params.intervals)
+        .map { label, vcfs, indices -> tuple(label, vcfs.sort { it.name }, indices.sort { it.name }) }
+    grouped_genotyped_bcftools_with_ref = ref_files.combine(grouped_genotyped_bcftools)
+        .map { fa, fai, dict, sample, vcfs, tbis ->
+            tuple(sample, [fa, fai, dict], vcfs, tbis) }
+
+    concat_bcftools = concatBcftoolsMpileupCalls(grouped_genotyped_bcftools_with_ref)
 
     // Build a strand bias model
     orientation_model_ch = paired_calls_ch.f1r2s
