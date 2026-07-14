@@ -189,8 +189,8 @@ process recallGermlineVariants {
 }
 
 process callBcftoolsMpileupVariants {
-    cpus 8
-    memory { 25.GB + 5.GB * (task.attempt - 1) }
+    cpus 2
+    memory { 3.GB + 1.GB * (task.attempt - 1) }
     errorStrategy 'retry'
     maxRetries 3
     time '12h'
@@ -207,8 +207,8 @@ process callBcftoolsMpileupVariants {
 
     output:
     tuple val(sample),
-        path("${sample}.bcftools.mpileup.vcf.gz"),
-        path("${sample}.bcftools.mpileup.vcf.gz.tbi"),
+        path("${interval_id}.${sample}.bcftools.mpileup.vcf.gz"),
+        path("${interval_id}.${sample}.bcftools.mpileup.vcf.gz.tbi"),
         val(interval_id),
         path(intervals),
         emit: vcfs
@@ -243,9 +243,11 @@ process callBcftoolsMpileupVariants {
         -A \
         -i \
         --threads ${task.cpus} \
-        -Oz -o "${interval_id}.${sample}.bcftools.mpileup.vcf.gz" \
+        -Ou \
+    | bcftools sort \
+        -Oz -o "${interval_id}.${sample}.bcftools.mpileup.vcf.gz" 
 
     # Index the output VCF
-    tabix "${interval_id}.${sample}.bcftools.mpileup.vcf.gz"
+    bcftools index -t "${interval_id}.${sample}.bcftools.mpileup.vcf.gz"
     """
 }
