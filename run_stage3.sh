@@ -17,8 +17,8 @@ stamp=$(date +%Y%m%d)
 samplesheet="samplesheet_${stamp}.csv"
 
 if [[ ! -f "${samplesheet}" ]]; then
-    echo "Error: samplesheet file '${samplesheet}' not found. Exiting."
-    exit 1
+   echo "Error: samplesheet file '${samplesheet}' not found. Exiting."
+   exit 1
 fi
 
 # Second, run the nextflow pipeline for stage 3
@@ -39,8 +39,8 @@ nextflow run ${PIPELINE_DIR}/stage3.nf \
          --panel_of_normals ${ANALYSIS_DIR}/MutectStage2MergedResources/panel_of_normals.vcf.gz \
          --somatic_candidates ${ANALYSIS_DIR}/MutectStage2MergedResources/candidates.vcf.gz \
          --bcftools_candidates ${ANALYSIS_DIR}/MutectStage2MergedResources/bcftools_candidates.tsv.gz \
-         --intervals 99 \
-         --outdir /nfs/casm/team267_murchison/sb71/stage3_final \
+         --intervals 90 \
+         --outdir ${ANALYSIS_DIR}/outputs/stage3_final \
          -with-report \
          -resume \
          -config ${PIPELINE_DIR}/stage3_nextflow.config
