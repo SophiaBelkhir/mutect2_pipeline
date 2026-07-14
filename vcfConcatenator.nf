@@ -84,7 +84,7 @@ process concatFilteredCalls {
     path("*.concatenated.vcf.gz"), emit: vcf
     path("*.concatenated.vcf.gz.tbi"), emit: tbi
 
-    // publishDir "${params.outdir}/Filtered/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
+    publishDir "${params.outdir}/MutectFinal/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
 
     script:
     """
@@ -115,7 +115,7 @@ process concatSecondHaplotypeCallerCalls {
     path("*.concatenated.vcf.gz"), emit: vcf
     path("*.concatenated.vcf.gz.tbi"), emit: tbi
 
-    // publishDir "${params.outdir}/SecondHaplotypeCallerCalls/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
+    publishDir "${params.outdir}/SecondHaplotypeCallerCalls/Samples", mode: 'copy', pattern: '*.concatenated.vcf.gz*'
 
     script:
     """
