@@ -22,7 +22,7 @@ include { filterMutectCallsOnNormals }                         from "./filterMod
 include { learnReadOrientationModel }                          from "./filterModelling.nf"
 include { concatFilteredCalls }                                from "./vcfConcatenator.nf"
 include { concatSecondHaplotypeCallerCalls }                   from "./vcfConcatenator.nf"
-include { concatBcftoolsMpileupCalls }                         from "./vcfConcatenator.nf"
+include { concatBcftoolsMpileupCalls } from "./vcfConcatenator.nf"
 include { callBcftoolsMpileupVariants }                        from "./finalVariantCalling.nf"
 
 // Comment out contamination modelling for now, as I don't find it relevant, but keep for future reference
