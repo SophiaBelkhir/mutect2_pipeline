@@ -12,7 +12,6 @@ process filterMutectCalls {
         path(stats),
         val(interval_id),
         path(intervals),
-        path(contamination),
         path(orientation)
 
     output:
@@ -27,7 +26,6 @@ process filterMutectCalls {
         --variant ${vcf[0]} \
         --stats ${stats} \
         --intervals ${intervals} \
-        --contamination-table ${contamination} \
         --orientation-bias-artifact-priors ${orientation} \
         --unique-alt-read-count 3 \
         --output ${interval_id}.${sample}.filtered.vcf.gz
