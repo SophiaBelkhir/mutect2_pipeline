@@ -1,5 +1,8 @@
+.DS_Store
+data/
 work/
 *~
 results/
 .nextflow*
 .nextflow/
+report-*.html
