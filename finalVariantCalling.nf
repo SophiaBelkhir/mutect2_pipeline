@@ -77,8 +77,8 @@ process callSomaticVariants {
     memory { 18.GB + 5.GB * (task.attempt - 1) }
     errorStrategy 'retry'
     maxRetries 3
-    time '48h'
-    queue 'long'
+    time { task.attempt > 1 ? 48.h : 12.h }
+    queue { task.attempt > 1 ? 'long' : 'normal' }
     executor 'lsf'
 
     input:
@@ -140,8 +140,8 @@ process recallGermlineVariants {
     memory { 18.GB + 5.GB * (task.attempt - 1) }
     errorStrategy 'retry'
     maxRetries 3
-    time '48h'
-    queue 'long'
+    time '12h'
+    queue 'normal'
     executor 'lsf'
 
     input:
